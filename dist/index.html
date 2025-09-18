@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>摸鱼小说阅读器</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app" data-tauri-drag-region>
+      <div class="resize-handle handle-n" data-direction="North"></div>
+      <div class="resize-handle handle-s" data-direction="South"></div>
+      <div class="resize-handle handle-e" data-direction="East"></div>
+      <div class="resize-handle handle-w" data-direction="West"></div>
+      <div class="resize-handle handle-ne" data-direction="NorthEast"></div>
+      <div class="resize-handle handle-nw" data-direction="NorthWest"></div>
+      <div class="resize-handle handle-se" data-direction="SouthEast"></div>
+      <div class="resize-handle handle-sw" data-direction="SouthWest"></div>
+      <div class="drag-strip" data-tauri-drag-region></div>
+      <header class="toolbar" data-tauri-drag-region>
+        <button id="open-file">打开小说</button>
+        <span id="file-info" class="file-info">未载入</span>
+        <input id="search-input" class="search-input" type="search" placeholder="搜索..." />
+        <button id="search-btn">查找</button>
+        <div class="spacer"></div>
+        <span id="boss-key-hint" class="hint"></span>
+        <button id="hide-ui">隐藏UI</button>
+        <button id="boss-key">老板键</button>
+      </header>
+      <main id="reader" class="reader" tabindex="0"></main>
+      <div id="reader-measure" class="reader measure" aria-hidden="true"></div>
+      <div id="boss-overlay" class="boss-overlay" hidden>
+        <div class="boss-overlay-header">
+          <span class="boss-title">workspace build monitor</span>
+          <button id="boss-exit">菜单</button>
+        </div>
+        <pre id="boss-log" class="boss-log"></pre>
+      </div>
+      <footer class="status-bar">
+        <button id="prev-page">上一页</button>
+        <span id="page-info">进度 0%</span>
+        <input id="page-slider" type="range" min="0" max="100" value="0" />
+        <button id="next-page">下一页</button>
+      </footer>
+      <button id="restore-ui" class="ui-restore" hidden>显示界面</button>
+    </div>
+    <script type="module" src="./main.js"></script>
+  </body>
+</html>

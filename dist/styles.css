@@ -1,0 +1,352 @@
+:root {
+  color-scheme: dark;
+  --bg-color: rgba(24, 24, 28, 0.6);
+  --bg-color-hidden: rgba(24, 24, 28, 0.15);
+  --text-color: rgba(230, 230, 230, 0.92);
+  --accent-color: rgba(80, 160, 255, 0.9);
+  --font-family: "Menlo", "Fira Code", "SFMono-Regular", monospace;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  font-family: var(--font-family);
+  background: transparent;
+  color: var(--text-color);
+}
+
+.app {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--bg-color);
+  border-radius: 12px;
+  backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.35);
+  position: relative;
+}
+
+.drag-strip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 28px;
+  display: none;
+  cursor: move;
+}
+
+.resize-handle {
+  position: absolute;
+  z-index: 10;
+  -webkit-app-region: no-drag;
+}
+
+.handle-n,
+.handle-s {
+  height: 6px;
+  left: 12px;
+  right: 12px;
+  cursor: ns-resize;
+}
+
+.handle-n {
+  top: -3px;
+}
+
+.handle-s {
+  bottom: -3px;
+}
+
+.handle-e,
+.handle-w {
+  width: 6px;
+  top: 12px;
+  bottom: 12px;
+  cursor: ew-resize;
+}
+
+.handle-e {
+  right: -3px;
+}
+
+.handle-w {
+  left: -3px;
+}
+
+.handle-ne,
+.handle-nw,
+.handle-se,
+.handle-sw {
+  width: 12px;
+  height: 12px;
+}
+
+.handle-ne {
+  cursor: nesw-resize;
+  right: -6px;
+  top: -6px;
+}
+
+.handle-nw {
+  cursor: nwse-resize;
+  left: -6px;
+  top: -6px;
+}
+
+.handle-se {
+  cursor: nwse-resize;
+  right: -6px;
+  bottom: -6px;
+}
+
+.handle-sw {
+  cursor: nesw-resize;
+  left: -6px;
+  bottom: -6px;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  user-select: none;
+}
+
+.toolbar button,
+.status-bar button {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: inherit;
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background 0.2s ease, border 0.2s ease;
+  -webkit-app-region: no-drag;
+}
+
+.toolbar button:hover,
+.status-bar button:hover {
+  background: rgba(255, 255, 255, 0.14);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.toolbar button:active,
+.status-bar button:active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+.file-info {
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+.search-input {
+  flex: 0 0 140px;
+  padding: 4px 6px;
+  border-radius: 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(0, 0, 0, 0.25);
+  color: inherit;
+  font-size: 12px;
+  -webkit-app-region: no-drag;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: rgba(255, 255, 255, 0.25);
+}
+
+.spacer {
+  flex: 1;
+}
+
+.reader {
+  flex: 1;
+  overflow: hidden;
+  padding: 12px 16px 16px;
+  font-size: 16px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+  -webkit-app-region: no-drag;
+}
+
+.reader:focus {
+  outline: none;
+}
+
+.reader.measure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  left: -9999px;
+  top: 0;
+  overflow: hidden;
+  z-index: -1;
+}
+
+.boss-overlay {
+  position: absolute;
+  inset: 56px 12px 56px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 18px 22px;
+  font-family: "Menlo", "SFMono-Regular", monospace;
+  font-size: 12px;
+  line-height: 1.52;
+  color: rgba(185, 200, 215, 0.95);
+  background: rgba(12, 17, 24, 0.85);
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.3), 0 12px 30px rgba(0, 0, 0, 0.45);
+  pointer-events: auto;
+  overflow: hidden;
+}
+
+.boss-overlay-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.boss-title {
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: 11px;
+  color: rgba(130, 160, 195, 0.9);
+}
+
+.boss-overlay-header button {
+  background: rgba(40, 55, 70, 0.8);
+  border: 1px solid rgba(165, 195, 230, 0.3);
+  color: rgba(220, 235, 255, 0.9);
+  padding: 4px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 12px;
+  transition: all 0.2s ease;
+}
+
+.boss-overlay-header button:hover {
+  background: rgba(70, 90, 115, 0.85);
+  border-color: rgba(185, 210, 245, 0.5);
+}
+
+.boss-log {
+  flex: 1;
+  margin: 0;
+  background: rgba(5, 8, 12, 0.55);
+  border-radius: 8px;
+  padding: 14px 18px;
+  overflow-y: auto;
+  color: rgba(165, 195, 220, 0.95);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+}
+
+.boss-overlay[hidden] {
+  display: none !important;
+}
+
+.status-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 8px 12px;
+  font-size: 12px;
+  user-select: none;
+}
+
+.status-bar button {
+  padding: 4px 12px;
+}
+
+.status-bar span {
+  opacity: 0.7;
+}
+
+.hidden-mode .toolbar,
+.hidden-mode .status-bar {
+  display: none;
+}
+
+.hidden-mode .ui-restore {
+  display: none !important;
+}
+
+.ui-restore {
+  position: absolute;
+  bottom: 12px;
+  right: 16px;
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(15, 20, 30, 0.78);
+  color: rgba(220, 235, 255, 0.92);
+  cursor: pointer;
+  display: none;
+  -webkit-app-region: no-drag;
+}
+
+.ui-restore:hover {
+  background: rgba(45, 60, 85, 0.85);
+}
+
+.minimal-mode .toolbar,
+.minimal-mode .status-bar,
+.minimal-mode .hint,
+.minimal-mode #hide-ui,
+.minimal-mode #boss-key {
+  display: none;
+}
+
+.minimal-mode .ui-restore {
+  display: block;
+}
+
+.minimal-mode .drag-strip,
+.hidden-mode .drag-strip {
+  display: block;
+}
+
+.status-bar input[type="range"] {
+  flex: 1;
+  max-width: 180px;
+  accent-color: var(--accent-color);
+  -webkit-app-region: no-drag;
+}
+
+.hidden-mode .app {
+  background: var(--bg-color-hidden);
+  box-shadow: none;
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+body.auto-hidden .app {
+  opacity: 0.18;
+  transition: opacity 0.3s ease;
+}
+
+.hint {
+  font-size: 11px;
+  opacity: 0.6;
+  margin-right: 8px;
+}
