@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Moyu Reader",
+  "version": "0.1.0",
+  "identifier": "com.moyu.reader",
+  "build": {
+    "beforeDevCommand": "",
+    "beforeBuildCommand": "",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "withGlobalTauri": true,
+    "security": {
+      "csp": null,
+      "capabilities": ["default"]
+    },
+    "windows": [
+      {
+        "label": "main",
+        "title": "摸鱼小说",
+        "width": 640,
+        "height": 600,
+        "resizable": true,
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": true,
+        "fullscreen": false,
+        "maximized": false,
+        "center": true,
+        "visible": true,
+        "skipTaskbar": true,
+        "devtools": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "category": "Productivity"
+  }
+}
