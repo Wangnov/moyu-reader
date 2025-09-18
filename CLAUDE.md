@@ -1,0 +1,32 @@
+# 项目记忆（moyu-reader）
+
+## 项目简介
+- 目标：打造一个用于“摸鱼”阅读小说的桌面浮窗，具备透明、无边框、置顶与伪装模式，可叠加在开发/终端窗口上偷闲而难被察觉。
+- 技术栈：Tauri v2 + Rust（分页、配置、快捷键）+ 原生 HTML/CSS/JS 前端；多平台图标通过 `icon.svg` 自动生成到 `src-tauri/icons/`。
+
+## 开发哲学与硬性约束
+- **Context7 必须先行**：任何涉及第三方库、框架、系统 API（含 Tauri、插件、Rust crate 等）的开发、调试或重构动作，必须先调用 Context7 拉取最新官方文档/参考，再做决策，严禁凭记忆实现。
+- Linus 精神：在开发时必须遵守 Linus 的开发精神。
+- 隐蔽优先：所有交互围绕“难被发现”展开，伪装模式、自动淡出等特性优先保障。
+- 安全可控：仅授予必要权限（通过 capability），前端在权限缺失时要降级或提示，避免 silent crash。
+- 渐进迭代：前后端职责分明，先确保阅读体验稳定，再扩展穿透、托盘等增强功能。
+
+## 代码风格与经验教训
+- Rust：2021 edition；模块化（`main/app_state/commands/novel/settings`），统一 `cargo fmt`，对外接口以 `anyhow::Result` 汇总。
+- 前端：Vanilla JS，集中缓存 DOM 引用；所有 Tauri API 调用前做可用性检测，支持插件/权限未注入时的 graceful fallback。
+- UI/资源：配色遵循暗色半透明风格；伪装模式使用独立 overlay，避免正文与假日志叠加。
+- 经验复盘：
+  - **未查文档导致的 bug**：窗口拖拽、对话框、快捷键在 v2 默认被禁用，必须结合 capability 才能生效；分页 panic 源于多字节字符切割，用 `split_off` 才彻底解决。
+  - 每次遇到“不明白为何失败”时，第一步应该是 Context7 → 官方文档 → 设计验证，避免盲目猜测。
+  - 老板键伪装需控制可见性与状态恢复，退出时要重载当前页并清理 overlay。
+  - 真正稳定的分页基于前端 DOM 实测：后端只保存偏移，避免字符数估算造成断章。
+
+## 文档与记忆维护
+- 根目录 `AGENTS.md` / `CLAUDE.md`：记录整体哲学、约束、经验教训，任何重大变更后立即同步。
+- 各级目录 `AGENTS.md` / `CLAUDE.md`：描述该目录职责；创建新目录时务必补齐记忆。
+- 设计演进写入 `docs/architecture.md`，并附 Context7 知识来源段落，保证“文档即约定”。
+
+## 发布与构建提示
+- 开发：`npm run dev`（直接加载 `dist/` 静态资源），首启动可能重新编译 Rust。
+- 构建：`npm run build` 触发 Tauri 打包，发布前检查 capability、图标和伪装体验。
+- Git：远端仓库可命名 `moyu-reader`，本地目录名可不同；推送前关注 `src-tauri/target` 等构建产物是否忽略。
