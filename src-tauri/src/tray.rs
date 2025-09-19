@@ -4,8 +4,7 @@ use serde::Serialize;
 use tauri::{
     menu::{MenuBuilder, MenuItem, PredefinedMenuItem},
     tray::{MouseButton, MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
-    App, AppHandle, Emitter, Manager, Result as TauriResult, WebviewUrl,
-    WebviewWindowBuilder, Wry,
+    App, AppHandle, Emitter, Manager, Result as TauriResult, WebviewUrl, WebviewWindowBuilder, Wry,
 };
 
 #[derive(Clone, Default)]
@@ -69,7 +68,7 @@ pub fn initialize_tray(app: &mut App) -> TauriResult<()> {
     let app_handle = app.handle().clone();
 
     let toggle_ui_item =
-        MenuItem::with_id(&app_handle, "toggle-ui", "隐藏界面", true, None::<&str>)?;
+        MenuItem::with_id(&app_handle, "toggle-ui", "隐藏界面按钮", true, None::<&str>)?;
     let open_settings_item = MenuItem::with_id(
         &app_handle,
         "open-settings",
@@ -79,13 +78,8 @@ pub fn initialize_tray(app: &mut App) -> TauriResult<()> {
     )?;
 
     #[cfg(debug_assertions)]
-    let dev_tools_item = MenuItem::with_id(
-        &app_handle,
-        "dev-tools",
-        "开发者工具",
-        true,
-        None::<&str>,
-    )?;
+    let dev_tools_item =
+        MenuItem::with_id(&app_handle, "dev-tools", "开发者工具", true, None::<&str>)?;
 
     let quit_item = PredefinedMenuItem::quit(&app_handle, Some("退出"))?;
 
@@ -98,10 +92,7 @@ pub fn initialize_tray(app: &mut App) -> TauriResult<()> {
         menu_builder = menu_builder.item(&dev_tools_item);
     }
 
-    let menu = menu_builder
-        .separator()
-        .item(&quit_item)
-        .build()?;
+    let menu = menu_builder.separator().item(&quit_item).build()?;
 
     let toggle_ui_id = toggle_ui_item.id().clone();
     let settings_id = open_settings_item.id().clone();
@@ -182,9 +173,9 @@ fn update_toggle_label(resources: &TrayResources) -> TauriResult<()> {
     resources
         .toggle_ui_item
         .set_text(if resources.minimal_mode {
-            "显示界面"
+            "显示界面按钮"
         } else {
-            "隐藏界面"
+            "隐藏界面按钮"
         })
 }
 
