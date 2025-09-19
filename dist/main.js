@@ -2,7 +2,10 @@ const tauriApi = window.__TAURI__ ?? {};
 const invoke = tauriApi.tauri?.invoke ?? tauriApi.core?.invoke;
 const dialogApi = tauriApi.dialog;
 const openDialog = dialogApi?.open;
-const appWindow = tauriApi.window?.appWindow ?? tauriApi.window;
+// 尝试获取窗口相关 API
+const windowApi = tauriApi.window;
+const getCurrentWindow = windowApi?.getCurrentWindow || windowApi?.getCurrent;
+const appWindow = getCurrentWindow ? getCurrentWindow() : windowApi?.appWindow;
 const listen = tauriApi.event?.listen;
 
 const readerEl = document.getElementById("reader");
@@ -17,8 +20,6 @@ const pageSlider = document.getElementById("page-slider");
 const bossOverlay = document.getElementById("boss-overlay");
 const bossLogEl = document.getElementById("boss-log");
 const bossExitBtn = document.getElementById("boss-exit");
-const hideUIButton = document.getElementById("hide-ui");
-const restoreUIButton = document.getElementById("restore-ui");
 
 let bossMode = false;
 let hiddenTimeout = null;
@@ -39,10 +40,6 @@ if (!invoke) {
 
 if (bossOverlay) {
   bossOverlay.hidden = true;
-}
-
-if (restoreUIButton) {
-  restoreUIButton.hidden = true;
 }
 
 if (pageSlider) {
@@ -187,11 +184,20 @@ function scheduleProgressSave() {
   }, 400);
 }
 
-function setMinimalMode(value) {
+function notifyTrayState() {
+  if (!invoke) return;
+  invoke("sync_tray_state", { minimal_mode: minimalMode }).catch((err) => {
+    console.debug("同步托盘状态失败", err);
+  });
+}
+
+function setMinimalMode(value, options = {}) {
+  const notify = options.notify ?? true;
+  const changed = minimalMode !== value;
   minimalMode = value;
   document.body.classList.toggle("minimal-mode", minimalMode);
-  if (restoreUIButton) {
-    restoreUIButton.hidden = !minimalMode;
+  if (changed && notify) {
+    notifyTrayState();
   }
 }
 
@@ -294,7 +300,9 @@ async function handleSearch(backwards = false) {
   }
 }
 
-function setBossMode(value) {
+function setBossMode(value, options = {}) {
+  const notify = options.notify ?? true;
+  const changed = bossMode !== value;
   bossMode = value;
   document.body.classList.toggle("hidden-mode", bossMode);
   if (bossOverlay) {
@@ -302,7 +310,6 @@ function setBossMode(value) {
   }
 
   if (bossMode) {
-    if (restoreUIButton) restoreUIButton.hidden = true;
     if (fileInfoEl) {
       lastFileLabel = fileInfoEl.textContent || "";
       fileInfoEl.textContent = "cargo build --release";
@@ -322,10 +329,13 @@ function setBossMode(value) {
     setMinimalMode(minimalMode);
     renderPage(currentOffset, { pushHistory: false });
   }
+  if (changed && notify) {
+    notifyTrayState();
+  }
 }
 
-function toggleBossMode() {
-  setBossMode(!bossMode);
+function toggleBossMode(notify = true) {
+  setBossMode(!bossMode, { notify });
 }
 
 function buildFakeLog() {
@@ -363,18 +373,7 @@ function setupEventListeners() {
   });
   document.getElementById("prev-page").addEventListener("click", goToPreviousPage);
   document.getElementById("next-page").addEventListener("click", goToNextPage);
-  bossKeyBtn.addEventListener("click", toggleBossMode);
-  if (hideUIButton) {
-    hideUIButton.addEventListener("click", () => {
-      if (bossMode) {
-        setBossMode(false);
-      }
-      setMinimalMode(true);
-    });
-  }
-  if (restoreUIButton) {
-    restoreUIButton.addEventListener("click", () => setMinimalMode(false));
-  }
+  bossKeyBtn.addEventListener("click", () => toggleBossMode(true));
   if (bossExitBtn) {
     bossExitBtn.addEventListener("click", () => setBossMode(false));
   }
@@ -450,18 +449,34 @@ async function setupWindowHooks() {
     return;
   }
   unlistenFns.push(
-    await appWindow.onResized(() => {
+    await appWindow.listen("tauri://resize", () => {
       autoDim();
       if (!bossMode) {
         renderPage(currentOffset, { pushHistory: false });
       }
     }),
   );
-  unlistenFns.push(await appWindow.onMoved(autoDim));
+  unlistenFns.push(await appWindow.listen("tauri://move", autoDim));
   unlistenFns.push(await appWindow.listen("tauri://focus", autoDim));
-  if (listen) {
-    unlistenFns.push(await listen("boss-key-toggle", toggleBossMode));
-  }
+  unlistenFns.push(
+    await appWindow.listen("boss-key-toggle", () => toggleBossMode(false)),
+  );
+  unlistenFns.push(
+    await appWindow.listen("ui-visibility", (event) => {
+      let payload = event?.payload;
+      if (typeof payload === "string") {
+        try {
+          payload = JSON.parse(payload);
+        } catch (error) {
+          console.debug("解析 ui-visibility 事件失败", error);
+          payload = null;
+        }
+      }
+      if (payload && typeof payload.minimal === "boolean") {
+        setMinimalMode(payload.minimal, { notify: false });
+      }
+    }),
+  );
 }
 
 async function hydrateSettings() {
@@ -480,6 +495,7 @@ async function init() {
   await hydrateSettings();
   readerEl.focus();
   await restoreDocument();
+  notifyTrayState();
 }
 
 init();
