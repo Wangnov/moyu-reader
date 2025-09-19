@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>摸鱼设置</title>
+    <style>
+      :root {
+        color-scheme: dark;
+      }
+      body {
+        margin: 0;
+        font-family: "SF Pro Display", "PingFang SC", "Segoe UI", sans-serif;
+        background: #1b1f24;
+        color: #d7dce2;
+      }
+      .container {
+        display: flex;
+        flex-direction: column;
+        gap: 16px;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 600;
+      }
+      section {
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.08);
+        background: rgba(255, 255, 255, 0.04);
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .pair {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      button {
+        padding: 6px 14px;
+        border-radius: 8px;
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        background: rgba(255, 255, 255, 0.04);
+        color: inherit;
+        font-size: 13px;
+        cursor: pointer;
+      }
+      button:hover {
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .hint {
+        font-size: 12px;
+        color: #6c7787;
+        line-height: 1.5;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>摸鱼设置</h1>
+      <section>
+        <div class="pair">
+          <span>老板键</span>
+          <code id="boss-key-value">读取中…</code>
+        </div>
+        <p class="hint">快捷键由主界面配置文件控制，后续版本会在此提供修改能力。</p>
+        <div class="pair">
+          <span></span>
+          <button id="close-settings" type="button">关闭</button>
+        </div>
+      </section>
+    </div>
+    <script type="module" src="./settings.js"></script>
+  </body>
+</html>
