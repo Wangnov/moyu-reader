@@ -2,12 +2,13 @@ mod app_state;
 mod commands;
 mod novel;
 mod settings;
+mod tray;
 
 use std::path::PathBuf;
 
 use anyhow::Result as AnyResult;
 use app_state::AppState;
-use commands::{app_settings, current_document, load_file, update_progress};
+use commands::{app_settings, current_document, load_file, sync_tray_state, update_progress};
 use novel::load_text;
 use settings::default_config_path;
 use tauri::{App, Emitter, Manager, Result as TauriResult, TitleBarStyle};
@@ -20,10 +21,13 @@ fn main() {
 
     tauri::Builder::default()
         .manage(app_state)
+        .manage(tray::TrayState::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .setup(|app| {
             configure_window(app).map_err(|err| -> Box<dyn std::error::Error> { err.into() })?;
+            tray::initialize_tray(app)
+                .map_err(|err| -> Box<dyn std::error::Error> { err.into() })?;
             restore_last_session(app)
                 .map_err(|err| -> Box<dyn std::error::Error> { err.into() })?;
             register_boss_key(app).map_err(|err| -> Box<dyn std::error::Error> { err.into() })?;
@@ -33,7 +37,8 @@ fn main() {
             load_file,
             current_document,
             update_progress,
-            app_settings
+            app_settings,
+            sync_tray_state
         ])
         .run(context)
         .expect("运行 Tauri 应用时出错");

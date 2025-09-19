@@ -5,6 +5,7 @@ use tauri::State;
 
 use crate::app_state::{AppState, StateSnapshot};
 use crate::novel::load_text;
+use crate::tray::TrayState;
 
 #[derive(Serialize)]
 pub struct DocumentPayload {
@@ -97,6 +98,16 @@ pub fn app_settings(state: State<'_, AppState>) -> SettingsPayload {
     SettingsPayload {
         boss_key: snapshot.config.boss_key.clone(),
     }
+}
+
+#[tauri::command]
+pub fn sync_tray_state(
+    minimal_mode: Option<bool>,
+    tray_state: State<'_, TrayState>,
+) -> Result<(), String> {
+    tray_state
+        .sync_from_frontend(minimal_mode)
+        .map_err(|err| err.to_string())
 }
 
 #[cfg(test)]
