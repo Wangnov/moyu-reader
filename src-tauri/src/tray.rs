@@ -51,6 +51,107 @@ impl TrayState {
         })
     }
 
+    pub fn update_dev_mode(&self, dev_mode: bool, app_handle: &AppHandle<Wry>) -> TauriResult<()> {
+        // 重新创建托盘菜单以应用新的开发者模式设置
+        if let Some(resources) = self.inner.write().expect("lock tray resources").take() {
+            // 先销毁旧的托盘
+            let previous_minimal = resources.minimal_mode;
+            drop(resources);
+
+            // 重新初始化托盘菜单
+            let toggle_ui_item = MenuItem::with_id(app_handle, "toggle-ui", "隐藏界面按钮", true, None::<&str>)?;
+            let open_settings_item = MenuItem::with_id(app_handle, "open-settings", "打开设置…", true, None::<&str>)?;
+            let dev_tools_item = MenuItem::with_id(app_handle, "dev-tools", "开发者工具", true, None::<&str>)?;
+            let quit_item = PredefinedMenuItem::quit(app_handle, Some("退出"))?;
+
+            let mut menu_builder = MenuBuilder::new(app_handle)
+                .item(&toggle_ui_item)
+                .item(&open_settings_item);
+
+            if dev_mode {
+                menu_builder = menu_builder.item(&dev_tools_item);
+            }
+
+            let menu = menu_builder.separator().item(&quit_item).build()?;
+
+            // 重新创建托盘
+            let mut tray_builder = TrayIconBuilder::new()
+                .tooltip("摸鱼阅读器")
+                .menu(&menu);
+
+            if let Some(icon) = app_handle.default_window_icon() {
+                tray_builder = tray_builder.icon(icon.clone());
+                #[cfg(target_os = "macos")]
+                {
+                    tray_builder = tray_builder.icon_as_template(true);
+                }
+            }
+
+            // 设置事件处理
+            let toggle_ui_id = toggle_ui_item.id().clone();
+            let settings_id = open_settings_item.id().clone();
+            let dev_tools_id = dev_tools_item.id().clone();
+            let quit_id = quit_item.id().clone();
+            let tray_state_clone = self.clone();
+            let dev_mode_clone = dev_mode;
+
+            tray_builder = tray_builder.on_menu_event(move |app, event| {
+                if event.id() == &toggle_ui_id {
+                    if let Err(err) = tray_state_clone.toggle_minimal_via_menu() {
+                        eprintln!("切换界面显示失败: {err}");
+                    }
+                } else if event.id() == &settings_id {
+                    if let Err(err) = open_settings(app) {
+                        eprintln!("打开设置窗口失败: {err}");
+                    }
+                } else if event.id() == &quit_id {
+                    app.exit(0);
+                } else if dev_mode_clone && event.id() == &dev_tools_id {
+                    if let Some(window) = app.get_webview_window("main") {
+                        #[cfg(debug_assertions)]
+                        {
+                            window.open_devtools();
+                        }
+                    }
+                }
+            })
+            .on_tray_icon_event(|tray, event| {
+                if let TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                } = event
+                {
+                    if let Some(window) = tray.app_handle().get_webview_window("main") {
+                        match window.is_visible() {
+                            Ok(true) => {
+                                let _ = window.hide();
+                            }
+                            Ok(false) | Err(_) => {
+                                let _ = window.unminimize();
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
+                        }
+                    }
+                }
+            });
+
+            let tray = tray_builder.build(app_handle)?;
+
+            // 存储新的资源，同时延续最小化状态
+            let new_resources = TrayResources {
+                tray,
+                toggle_ui_item,
+                minimal_mode: previous_minimal,
+            };
+            update_toggle_label(&new_resources)?;
+            self.store(new_resources);
+        }
+
+        Ok(())
+    }
+
     fn with_tray<F>(&self, mut f: F) -> TauriResult<()>
     where
         F: FnMut(&mut TrayResources) -> TauriResult<()>,
@@ -64,8 +165,17 @@ impl TrayState {
 }
 
 pub fn initialize_tray(app: &mut App) -> TauriResult<()> {
+    use crate::app_state::AppState;
+
     let tray_state = app.state::<TrayState>().inner().clone();
     let app_handle = app.handle().clone();
+
+    // 获取开发者模式设置
+    let dev_mode = {
+        let app_state = app.state::<AppState>();
+        let snapshot = app_state.snapshot();
+        snapshot.config.system.dev_mode
+    };
 
     let toggle_ui_item =
         MenuItem::with_id(&app_handle, "toggle-ui", "隐藏界面按钮", true, None::<&str>)?;
@@ -77,7 +187,7 @@ pub fn initialize_tray(app: &mut App) -> TauriResult<()> {
         None::<&str>,
     )?;
 
-    #[cfg(debug_assertions)]
+    // 总是创建开发者工具菜单项，但根据设置决定是否显示
     let dev_tools_item =
         MenuItem::with_id(&app_handle, "dev-tools", "开发者工具", true, None::<&str>)?;
 
@@ -87,8 +197,8 @@ pub fn initialize_tray(app: &mut App) -> TauriResult<()> {
         .item(&toggle_ui_item)
         .item(&open_settings_item);
 
-    #[cfg(debug_assertions)]
-    {
+    // 根据开发者模式设置决定是否添加开发者工具
+    if dev_mode {
         menu_builder = menu_builder.item(&dev_tools_item);
     }
 
@@ -96,12 +206,10 @@ pub fn initialize_tray(app: &mut App) -> TauriResult<()> {
 
     let toggle_ui_id = toggle_ui_item.id().clone();
     let settings_id = open_settings_item.id().clone();
-
-    #[cfg(debug_assertions)]
     let dev_tools_id = dev_tools_item.id().clone();
-
     let quit_id = quit_item.id().clone();
     let tray_state_for_menu = tray_state.clone();
+    let dev_mode_clone = dev_mode;
 
     let mut tray_builder = TrayIconBuilder::new()
         .tooltip("摸鱼阅读器")
@@ -117,12 +225,10 @@ pub fn initialize_tray(app: &mut App) -> TauriResult<()> {
                 }
             } else if event.id() == &quit_id {
                 app.exit(0);
-            }
-
-            #[cfg(debug_assertions)]
-            {
-                if event.id() == &dev_tools_id {
-                    if let Some(window) = app.get_webview_window("main") {
+            } else if dev_mode_clone && event.id() == &dev_tools_id {
+                if let Some(window) = app.get_webview_window("main") {
+                    #[cfg(debug_assertions)]
+                    {
                         window.open_devtools();
                     }
                 }

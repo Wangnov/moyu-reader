@@ -8,7 +8,11 @@ use std::path::PathBuf;
 
 use anyhow::Result as AnyResult;
 use app_state::AppState;
-use commands::{app_settings, current_document, load_file, sync_tray_state, update_progress};
+use commands::{
+    app_settings, current_document, get_all_settings, load_file, register_global_shortcut,
+    reset_settings, sync_tray_state, unregister_global_shortcut, update_all_shortcuts,
+    update_progress, update_settings,
+};
 use novel::load_text;
 use settings::default_config_path;
 use tauri::{App, Emitter, Manager, Result as TauriResult};
@@ -40,7 +44,13 @@ fn main() {
             current_document,
             update_progress,
             app_settings,
-            sync_tray_state
+            get_all_settings,
+            update_settings,
+            reset_settings,
+            sync_tray_state,
+            register_global_shortcut,
+            unregister_global_shortcut,
+            update_all_shortcuts
         ])
         .run(context)
         .expect("运行 Tauri 应用时出错");

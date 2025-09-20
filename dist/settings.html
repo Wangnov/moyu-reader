@@ -4,74 +4,247 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>摸鱼设置</title>
-    <style>
-      :root {
-        color-scheme: dark;
-      }
-      body {
-        margin: 0;
-        font-family: "SF Pro Display", "PingFang SC", "Segoe UI", sans-serif;
-        background: #1b1f24;
-        color: #d7dce2;
-      }
-      .container {
-        display: flex;
-        flex-direction: column;
-        gap: 16px;
-        padding: 24px;
-      }
-      h1 {
-        margin: 0;
-        font-size: 18px;
-        font-weight: 600;
-      }
-      section {
-        border-radius: 12px;
-        border: 1px solid rgba(255, 255, 255, 0.08);
-        background: rgba(255, 255, 255, 0.04);
-        padding: 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 8px;
-      }
-      .pair {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-      }
-      button {
-        padding: 6px 14px;
-        border-radius: 8px;
-        border: 1px solid rgba(255, 255, 255, 0.12);
-        background: rgba(255, 255, 255, 0.04);
-        color: inherit;
-        font-size: 13px;
-        cursor: pointer;
-      }
-      button:hover {
-        background: rgba(255, 255, 255, 0.08);
-      }
-      .hint {
-        font-size: 12px;
-        color: #6c7787;
-        line-height: 1.5;
-      }
-    </style>
+    <link rel="stylesheet" href="./settings.css" />
   </head>
   <body>
-    <div class="container">
-      <h1>摸鱼设置</h1>
-      <section>
-        <div class="pair">
-          <span>老板键</span>
-          <code id="boss-key-value">读取中…</code>
+    <div class="settings-container">
+      <nav class="settings-sidebar">
+        <h1 class="settings-title">设置</h1>
+        <ul class="settings-nav">
+          <li class="nav-item active" data-panel="appearance">
+            <span class="nav-icon">🎨</span>
+            <span class="nav-label">外观</span>
+          </li>
+          <li class="nav-item" data-panel="reading">
+            <span class="nav-icon">📖</span>
+            <span class="nav-label">阅读</span>
+          </li>
+          <li class="nav-item" data-panel="privacy">
+            <span class="nav-icon">🔒</span>
+            <span class="nav-label">隐私与伪装</span>
+          </li>
+          <li class="nav-item" data-panel="keybindings">
+            <span class="nav-icon">⌨️</span>
+            <span class="nav-label">快捷键</span>
+          </li>
+          <li class="nav-item" data-panel="system">
+            <span class="nav-icon">⚙️</span>
+            <span class="nav-label">系统</span>
+          </li>
+          <li class="nav-item" data-panel="about">
+            <span class="nav-icon">ℹ️</span>
+            <span class="nav-label">关于</span>
+          </li>
+        </ul>
+      </nav>
+      <main class="settings-content">
+        <div class="settings-panel active" id="appearance-panel">
+          <h2>外观设置</h2>
+          <section class="settings-section">
+            <h3>窗口样式</h3>
+            <div class="setting-item">
+              <label for="window-opacity">窗口透明度</label>
+              <div class="setting-control">
+                <input type="range" id="window-opacity" min="0" max="100" value="90" />
+                <span class="value-display">90%</span>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label for="text-opacity">文字透明度</label>
+              <div class="setting-control">
+                <input type="range" id="text-opacity" min="50" max="100" value="100" />
+                <span class="value-display">100%</span>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label for="background-color">背景颜色</label>
+              <div class="setting-control">
+                <input type="color" id="background-color" value="#1b1f24" />
+                <button id="reset-bg-color" class="small-btn">默认</button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label for="text-color">文字颜色</label>
+              <div class="setting-control">
+                <input type="color" id="text-color" value="#d7dce2" />
+                <button id="reset-text-color" class="small-btn">默认</button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label for="always-on-top">始终置顶</label>
+              <div class="setting-control">
+                <input type="checkbox" id="always-on-top" checked />
+              </div>
+            </div>
+            <div class="setting-item">
+              <label for="show-in-taskbar">显示在任务栏</label>
+              <div class="setting-control">
+                <input type="checkbox" id="show-in-taskbar" />
+              </div>
+            </div>
+          </section>
+          <section class="settings-section">
+            <h3>字体设置</h3>
+            <div class="setting-item">
+              <label for="font-size">字体大小</label>
+              <div class="setting-control">
+                <input type="range" id="font-size" min="12" max="36" value="16" />
+                <span class="value-display">16px</span>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label for="line-height">行高</label>
+              <div class="setting-control">
+                <input type="range" id="line-height" min="10" max="30" value="18" step="1" />
+                <span class="value-display">1.8</span>
+              </div>
+            </div>
+          </section>
         </div>
-        <p class="hint">快捷键由主界面配置文件控制，后续版本会在此提供修改能力。</p>
-        <div class="pair">
-          <span></span>
-          <button id="close-settings" type="button">关闭</button>
+        <div class="settings-panel" id="reading-panel">
+          <h2>阅读设置</h2>
+          <section class="settings-section">
+            <h3>分页控制</h3>
+            <div class="setting-item">
+              <label for="max-chars">每页最大字符数</label>
+              <div class="setting-control">
+                <input type="number" id="max-chars" min="100" max="5000" value="900" />
+              </div>
+            </div>
+            <div class="setting-item">
+              <label for="smart-break">智能断句</label>
+              <div class="setting-control">
+                <input type="checkbox" id="smart-break" checked />
+              </div>
+            </div>
+          </section>
+          <section class="settings-section">
+            <h3>阅读体验</h3>
+            <div class="setting-item">
+              <label for="auto-save-interval">自动保存进度</label>
+              <div class="setting-control">
+                <select id="auto-save-interval">
+                  <option value="instant">即时保存</option>
+                  <option value="5">每5秒</option>
+                  <option value="30">每30秒</option>
+                  <option value="60">每分钟</option>
+                  <option value="manual">手动保存</option>
+                </select>
+              </div>
+            </div>
+          </section>
         </div>
-      </section>
+        <div class="settings-panel" id="privacy-panel">
+          <h2>隐私与伪装</h2>
+          <section class="settings-section">
+            <h3>老板键设置</h3>
+            <div class="setting-item">
+              <label for="boss-key">快捷键</label>
+              <div class="setting-control">
+                <input type="text" id="boss-key" value="Ctrl+Alt+Space" readonly />
+                <button class="record-key-btn">录制</button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label for="boss-action">触发行为</label>
+              <div class="setting-control">
+                <select id="boss-action">
+                  <option value="disguise">显示伪装界面</option>
+                  <option value="minimize">最小化到托盘</option>
+                  <option value="hide">完全隐藏窗口</option>
+                </select>
+              </div>
+            </div>
+          </section>
+          <section class="settings-section">
+            <h3>自动隐藏</h3>
+            <div class="setting-item">
+              <label for="auto-fade">鼠标离开后自动淡出</label>
+              <div class="setting-control">
+                <input type="checkbox" id="auto-fade" />
+              </div>
+            </div>
+            <div class="setting-item">
+              <label for="fade-delay">淡出延迟</label>
+              <div class="setting-control">
+                <input type="range" id="fade-delay" min="1" max="60" value="5" />
+                <span class="value-display">5秒</span>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="settings-panel" id="keybindings-panel">
+          <h2>快捷键设置</h2>
+          <section class="settings-section">
+            <h3>导航快捷键</h3>
+            <div class="setting-item">
+              <label>上一页</label>
+              <div class="setting-control">
+                <input type="text" class="keybinding" data-binding="prev_page" id="key-prev-page" value="PageUp" readonly />
+                <button class="record-key-btn">录制</button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label>下一页</label>
+              <div class="setting-control">
+                <input type="text" class="keybinding" data-binding="next_page" id="key-next-page" value="PageDown" readonly />
+                <button class="record-key-btn">录制</button>
+              </div>
+            </div>
+            <div class="setting-item">
+              <label>搜索</label>
+              <div class="setting-control">
+                <input type="text" class="keybinding" data-binding="search" id="key-search" value="Ctrl+F" readonly />
+                <button class="record-key-btn">录制</button>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="settings-panel" id="system-panel">
+          <h2>系统设置</h2>
+          <section class="settings-section">
+            <h3>启动选项</h3>
+            <div class="setting-item">
+              <label for="auto-start">开机自启动</label>
+              <div class="setting-control">
+                <input type="checkbox" id="auto-start" />
+              </div>
+            </div>
+            <div class="setting-item">
+              <label for="restore-reading">启动时恢复上次阅读</label>
+              <div class="setting-control">
+                <input type="checkbox" id="restore-reading" checked />
+              </div>
+            </div>
+          </section>
+          <section class="settings-section">
+            <h3>高级设置</h3>
+            <div class="setting-item">
+              <label for="dev-mode">开发者模式</label>
+              <div class="setting-control">
+                <input type="checkbox" id="dev-mode" />
+              </div>
+            </div>
+            <div class="setting-item">
+              <button class="danger-btn" id="reset-settings">重置所有设置</button>
+            </div>
+          </section>
+        </div>
+        <div class="settings-panel" id="about-panel">
+          <h2>关于</h2>
+          <section class="settings-section">
+            <div class="about-info">
+              <h3>摸鱼阅读器</h3>
+              <p>版本：0.1.0</p>
+              <p>一个用于隐蔽阅读的桌面浮窗应用</p>
+              <div class="about-links">
+                <button id="check-update">检查更新</button>
+                <button id="open-github">GitHub</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </main>
     </div>
     <script type="module" src="./settings.js"></script>
   </body>

@@ -1,7 +1,7 @@
 use std::path::PathBuf;
 
 use serde::Serialize;
-use tauri::State;
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::app_state::{AppState, StateSnapshot};
 use crate::novel::load_text;
@@ -101,6 +101,66 @@ pub fn app_settings(state: State<'_, AppState>) -> SettingsPayload {
 }
 
 #[tauri::command]
+pub fn get_all_settings(state: State<'_, AppState>) -> Result<crate::settings::AppConfig, String> {
+    let snapshot = state.snapshot();
+    Ok(snapshot.config.clone())
+}
+
+#[tauri::command]
+pub fn update_settings(
+    settings: crate::settings::AppConfig,
+    state: State<'_, AppState>,
+    tray_state: State<'_, TrayState>,
+    app: AppHandle,
+) -> Result<(), String> {
+    let dev_mode_changed = {
+        let mut guard = state.write();
+        let current = &mut guard.config;
+        let changed = current.system.dev_mode != settings.system.dev_mode;
+
+        current.boss_key = settings.boss_key.clone();
+        current.max_chars_per_page = settings.max_chars_per_page;
+        current.appearance = settings.appearance.clone();
+        current.reading = settings.reading.clone();
+        current.privacy = settings.privacy.clone();
+        current.keybindings = settings.keybindings.clone();
+        current.system = settings.system.clone();
+
+        changed
+    };
+
+    state
+        .save_config()
+        .map_err(|err| format!("保存配置失败: {}", err))?;
+
+    if dev_mode_changed {
+        tray_state
+            .update_dev_mode(settings.system.dev_mode, &app)
+            .map_err(|err| format!("更新托盘菜单失败: {}", err))?;
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn reset_settings(state: State<'_, AppState>) -> Result<(), String> {
+    {
+        let mut guard = state.write();
+        let default_config = crate::settings::AppConfig::default();
+        // 保留当前打开的文件和阅读位置
+        guard.config = crate::settings::AppConfig {
+            last_file: guard.config.last_file.clone(),
+            last_page: guard.config.last_page,
+            last_offset: guard.config.last_offset,
+            ..default_config
+        };
+    }
+    state
+        .save_config()
+        .map_err(|err| format!("重置设置失败: {}", err))
+}
+
+#[tauri::command]
 pub fn sync_tray_state(
     minimal_mode: Option<bool>,
     tray_state: State<'_, TrayState>,
@@ -108,6 +168,82 @@ pub fn sync_tray_state(
     tray_state
         .sync_from_frontend(minimal_mode)
         .map_err(|err| err.to_string())
+}
+
+#[tauri::command]
+pub fn register_global_shortcut(
+    shortcut: String,
+    action: String,
+    app: AppHandle,
+) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+    // 先尝试注销已有的快捷键
+    let _ = app.global_shortcut().unregister(shortcut.as_str());
+
+    // 注册新的快捷键
+    let action_clone = action.clone();
+    app.global_shortcut()
+        .on_shortcut(shortcut.as_str(), move |app, _, _| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.emit(&format!("shortcut-{}", action_clone), ());
+            }
+        })
+        .map_err(|err| format!("注册快捷键 {} 失败: {}", shortcut, err))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn unregister_global_shortcut(shortcut: String, app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+    app.global_shortcut()
+        .unregister(shortcut.as_str())
+        .map_err(|err| format!("注销快捷键 {} 失败: {}", shortcut, err))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+pub fn update_all_shortcuts(state: State<'_, AppState>, app: AppHandle) -> Result<(), String> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+
+    let snapshot = state.snapshot();
+    let shortcuts = vec![
+        (snapshot.config.boss_key.clone(), "boss-key"),
+        (
+            snapshot.config.keybindings.prev_page.clone(),
+            "prev-page",
+        ),
+        (
+            snapshot.config.keybindings.next_page.clone(),
+            "next-page",
+        ),
+        (snapshot.config.keybindings.search.clone(), "search"),
+    ];
+
+    // 注销所有现有快捷键
+    let _ = app.global_shortcut().unregister_all();
+
+    // 重新注册所有快捷键
+    for (shortcut, action) in shortcuts {
+        if shortcut.is_empty() || shortcut == "None" {
+            continue;
+        }
+
+        let action_str = action.to_string();
+        let shortcut_str = shortcut.as_str();
+        if let Err(err) = app.global_shortcut().on_shortcut(shortcut_str, move |app, _, _| {
+            if let Some(window) = app.get_webview_window("main") {
+                let _ = window.emit(&format!("shortcut-{}", action_str), ());
+            }
+        }) {
+            eprintln!("注册快捷键 {} 失败: {}", shortcut, err);
+        }
+    }
+
+    Ok(())
 }
 
 #[cfg(test)]

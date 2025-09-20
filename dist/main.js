@@ -487,6 +487,33 @@ async function setupWindowHooks() {
   unlistenFns.push(
     await appWindow.listen("boss-key-toggle", () => toggleBossMode(false)),
   );
+
+  // 监听全局快捷键事件
+  unlistenFns.push(
+    await appWindow.listen("shortcut-boss-key", () => toggleBossMode(false)),
+  );
+  unlistenFns.push(
+    await appWindow.listen("shortcut-prev-page", () => {
+      if (!bossMode && currentOffset > 0) {
+        prevPage();
+      }
+    }),
+  );
+  unlistenFns.push(
+    await appWindow.listen("shortcut-next-page", () => {
+      if (!bossMode && nextOffset < fullLength) {
+        nextPage();
+      }
+    }),
+  );
+  unlistenFns.push(
+    await appWindow.listen("shortcut-search", () => {
+      if (!bossMode && searchInput) {
+        searchInput.focus();
+      }
+    }),
+  );
+
   unlistenFns.push(
     await appWindow.listen("ui-visibility", (event) => {
       let payload = event?.payload;
@@ -503,15 +530,189 @@ async function setupWindowHooks() {
       }
     }),
   );
+  // 监听设置变更事件
+  const handleSettingsChanged = (event) => {
+    const settings = event?.payload;
+    if (settings) {
+      applySettings(settings);
+    }
+  };
+
+  if (tauriApi.event?.listen) {
+    try {
+      const unlistenSettings = await tauriApi.event.listen("settings-changed", handleSettingsChanged);
+      if (typeof unlistenSettings === "function") {
+        unlistenFns.push(unlistenSettings);
+      }
+    } catch (error) {
+      console.error("监听 settings-changed 事件失败:", error);
+    }
+  } else if (appWindow?.listen) {
+    unlistenFns.push(
+      await appWindow.listen("settings-changed", handleSettingsChanged),
+    );
+  }
+}
+
+// 将十六进制颜色转换为RGB
+function hexToRgb(hex) {
+  // 移除#号
+  hex = hex.replace('#', '');
+
+  // 处理3位的简写形式
+  if (hex.length === 3) {
+    hex = hex[0] + hex[0] + hex[1] + hex[1] + hex[2] + hex[2];
+  }
+
+  const result = /^([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+  return result ? {
+    r: parseInt(result[1], 16),
+    g: parseInt(result[2], 16),
+    b: parseInt(result[3], 16)
+  } : null;
+}
+
+// 应用设置到主窗口
+async function applySettings(settings) {
+  try {
+    // 应用外观设置
+    if (settings.appearance) {
+      // 窗口透明度
+      const windowOpacity = (settings.appearance.window_opacity || 90) / 100;
+      const textOpacity = (settings.appearance.text_opacity || 100) / 100;
+
+      // 更新CSS变量
+      document.documentElement.style.setProperty('--window-opacity', windowOpacity);
+      document.documentElement.style.setProperty('--text-opacity', textOpacity);
+
+      // 背景颜色处理
+      const bgColor = settings.appearance.background_color || '#1b1f24';
+      const rgb = hexToRgb(bgColor);
+
+      // 更新窗口背景色和透明度
+      const root = document.documentElement;
+      if (rgb) {
+        const normalizedOpacity = Math.max(0, Math.min(windowOpacity, 1));
+        const baseColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${normalizedOpacity})`;
+        const hiddenOpacity = Math.max(0, Math.min(normalizedOpacity * 0.25, 1));
+
+        if (document.body) {
+          document.body.style.backgroundColor = normalizedOpacity <= 0.01 ? 'transparent' : baseColor;
+        }
+        if (root) {
+          root.style.setProperty('--bg-color', baseColor);
+          root.style.setProperty('--bg-color-hidden', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${hiddenOpacity})`);
+        }
+      } else {
+        if (document.body) {
+          document.body.style.backgroundColor = 'transparent';
+        }
+        if (root) {
+          root.style.setProperty('--bg-color', 'transparent');
+          root.style.setProperty('--bg-color-hidden', 'transparent');
+        }
+      }
+
+      // 文字颜色
+      const textColor = settings.appearance.text_color || '#d7dce2';
+      if (root) {
+        root.style.setProperty('--text-color', textColor);
+      }
+      if (document.body) {
+        document.body.style.color = textColor;
+      }
+      if (readerEl) {
+        readerEl.style.color = textColor;
+        readerEl.style.opacity = textOpacity;
+      }
+// 字体大小和行高
+      if (readerEl) {
+        readerEl.style.fontSize = `${settings.appearance.font_size || 16}px`;
+        readerEl.style.lineHeight = `${(settings.appearance.line_height || 18) / 10}`;
+      }
+
+      // 窗口行为设置
+      if (appWindow) {
+        if (appWindow.setAlwaysOnTop) {
+          await appWindow.setAlwaysOnTop(settings.appearance.always_on_top !== false);
+        }
+        if (appWindow.setSkipTaskbar) {
+          await appWindow.setSkipTaskbar(settings.appearance.show_in_taskbar === false);
+        }
+      }
+    }
+
+    // 应用阅读设置
+    if (settings.reading) {
+      const interval = settings.reading.auto_save_interval;
+      if (typeof interval === "string") {
+        setupAutoSave(interval);
+      }
+    }
+
+    // 更新老板键显示
+    if (settings.boss_key && bossKeyHintEl) {
+      bossKeyHintEl.textContent = `快捷键: ${settings.boss_key}`;
+    }
+
+    // 如果正在阅读，重新渲染页面以应用新的分页设置
+    if (fullText && settings.max_chars_per_page) {
+      renderPage(currentOffset, { pushHistory: false });
+    }
+
+    console.log('设置已应用到主窗口');
+  } catch (error) {
+    console.error('应用设置失败:', error);
+  }
+}
+
+// 设置自动保存定时器
+let autoSaveTimer = null;
+function setupAutoSave(interval) {
+  // 清除之前的定时器
+  if (autoSaveTimer) {
+    clearInterval(autoSaveTimer);
+    autoSaveTimer = null;
+  }
+
+  // 设置新的定时器
+  if (interval === 'instant') {
+    // 即时保存模式已在 updateProgress 中处理
+    return;
+  }
+
+  const intervalMs = interval === '5' ? 5000 :
+                     interval === '30' ? 30000 :
+                     interval === '60' ? 60000 : 0;
+
+  if (intervalMs > 0) {
+    autoSaveTimer = setInterval(() => {
+      if (currentOffset > 0 && fullText) {
+        commitProgress();
+      }
+    }, intervalMs);
+  }
 }
 
 async function hydrateSettings() {
   if (!invoke) return;
   try {
-    const settings = await invoke("app_settings");
-    bossKeyHintEl.textContent = settings?.boss_key ? `快捷键: ${settings.boss_key}` : "";
+    // 获取完整的设置
+    const settings = await invoke("get_all_settings");
+    if (settings) {
+      // 应用所有设置
+      await applySettings(settings);
+    }
   } catch (error) {
-    console.debug("读取配置失败", error);
+    // 如果新命令失败，尝试旧的方式
+    try {
+      const oldSettings = await invoke("app_settings");
+      if (oldSettings?.boss_key && bossKeyHintEl) {
+        bossKeyHintEl.textContent = `快捷键: ${oldSettings.boss_key}`;
+      }
+    } catch (fallbackError) {
+      console.debug("读取配置失败", fallbackError);
+    }
   }
 }
 
