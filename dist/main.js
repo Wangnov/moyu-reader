@@ -48,6 +48,32 @@ if (pageSlider) {
   pageSlider.value = "0";
 }
 
+// 修复 Windows 透明窗口边框问题
+async function fixTransparentBorder() {
+  if (!appWindow) return;
+
+  try {
+    // 延迟执行以确保窗口完全初始化
+    setTimeout(async () => {
+      // 动态切换装饰来触发窗口重绘
+      await appWindow.setDecorations(false);
+      // 短暂延迟后再次设置
+      setTimeout(async () => {
+        await appWindow.setDecorations(true);
+        // 最终保持无装饰状态
+        setTimeout(async () => {
+          await appWindow.setDecorations(false);
+        }, 50);
+      }, 50);
+    }, 100);
+  } catch (err) {
+    console.warn("无法修复窗口边框:", err);
+  }
+}
+
+// 页面加载完成后执行窗口边框修复
+document.addEventListener('DOMContentLoaded', fixTransparentBorder);
+
 function selectFileDialog() {
   if (!openDialog) {
     console.error("未启用对话框插件或权限，无法打开文件。", dialogApi);

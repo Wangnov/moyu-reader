@@ -11,7 +11,9 @@ use app_state::AppState;
 use commands::{app_settings, current_document, load_file, sync_tray_state, update_progress};
 use novel::load_text;
 use settings::default_config_path;
-use tauri::{App, Emitter, Manager, Result as TauriResult, TitleBarStyle};
+use tauri::{App, Emitter, Manager, Result as TauriResult};
+#[cfg(target_os = "macos")]
+use tauri::TitleBarStyle;
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 fn main() {
@@ -56,13 +58,19 @@ fn configure_window(app: &mut App) -> TauriResult<()> {
         window.set_decorations(false)?;
         window.set_resizable(true)?;
         window.set_focus()?;
+
         #[cfg(target_os = "macos")]
         {
             window.set_title_bar_style(TitleBarStyle::Overlay)?;
         }
+
         #[cfg(target_os = "windows")]
         {
             window.set_skip_taskbar(true)?;
+            // Tauri v2 内置了 set_shadow 方法
+            // 注意：在配置中设置 shadow: false 会完全移除边框
+            // 这里可以根据需要动态切换
+            // window.set_shadow(false)?;
         }
     }
     Ok(())
