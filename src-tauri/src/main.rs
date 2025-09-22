@@ -15,9 +15,9 @@ use commands::{
 };
 use novel::load_text;
 use settings::default_config_path;
-use tauri::{App, Emitter, Manager, Result as TauriResult};
 #[cfg(target_os = "macos")]
 use tauri::TitleBarStyle;
+use tauri::{App, Emitter, Manager, Result as TauriResult};
 use tauri_plugin_global_shortcut::GlobalShortcutExt;
 
 fn main() {
@@ -90,6 +90,10 @@ fn restore_last_session(app: &mut App) -> AnyResult<()> {
     let handle = app.handle();
     let state = handle.state::<AppState>();
     let snapshot = state.snapshot();
+
+    if !snapshot.config.system.restore_reading {
+        return Ok(());
+    }
 
     if let Some(path) = snapshot.config.last_file.clone() {
         if path.exists() {

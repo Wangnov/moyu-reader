@@ -33,7 +33,7 @@ fn snapshot_to_payload(snapshot: &StateSnapshot) -> DocumentPayload {
 fn load_document_internal(state: &AppState, path_buf: PathBuf) -> Result<DocumentPayload, String> {
     let text = load_text(&path_buf).map_err(|err| err.to_string())?;
 
-    {
+    let payload = {
         let mut guard = state.write();
         guard.file_path = Some(path_buf.clone());
         guard.text = text;
@@ -51,13 +51,22 @@ fn load_document_internal(state: &AppState, path_buf: PathBuf) -> Result<Documen
         guard.config.last_file = Some(path_buf);
         guard.config.last_offset = guard.current_offset;
         guard.config.last_page = 0;
-    }
+
+        DocumentPayload {
+            file_path: guard
+                .file_path
+                .as_ref()
+                .map(|path| path.display().to_string()),
+            content: guard.text.clone(),
+            offset: guard.current_offset,
+        }
+    };
 
     state
         .save_config()
         .map_err(|err| format!("保存配置失败: {}", err))?;
 
-    Ok(snapshot_to_payload(&state.snapshot()))
+    Ok(payload)
 }
 
 fn update_progress_internal(state: &AppState, offset: usize) -> Result<(), String> {
@@ -212,14 +221,8 @@ pub fn update_all_shortcuts(state: State<'_, AppState>, app: AppHandle) -> Resul
     let snapshot = state.snapshot();
     let shortcuts = vec![
         (snapshot.config.boss_key.clone(), "boss-key"),
-        (
-            snapshot.config.keybindings.prev_page.clone(),
-            "prev-page",
-        ),
-        (
-            snapshot.config.keybindings.next_page.clone(),
-            "next-page",
-        ),
+        (snapshot.config.keybindings.prev_page.clone(), "prev-page"),
+        (snapshot.config.keybindings.next_page.clone(), "next-page"),
         (snapshot.config.keybindings.search.clone(), "search"),
     ];
 
@@ -234,11 +237,14 @@ pub fn update_all_shortcuts(state: State<'_, AppState>, app: AppHandle) -> Resul
 
         let action_str = action.to_string();
         let shortcut_str = shortcut.as_str();
-        if let Err(err) = app.global_shortcut().on_shortcut(shortcut_str, move |app, _, _| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.emit(&format!("shortcut-{}", action_str), ());
-            }
-        }) {
+        if let Err(err) = app
+            .global_shortcut()
+            .on_shortcut(shortcut_str, move |app, _, _| {
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.emit(&format!("shortcut-{}", action_str), ());
+                }
+            })
+        {
             eprintln!("注册快捷键 {} 失败: {}", shortcut, err);
         }
     }

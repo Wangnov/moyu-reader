@@ -20,6 +20,7 @@ const pageSlider = document.getElementById("page-slider");
 const bossOverlay = document.getElementById("boss-overlay");
 const bossLogEl = document.getElementById("boss-log");
 const bossExitBtn = document.getElementById("boss-exit");
+const restoreUiBtn = document.getElementById("restore-ui");
 
 let bossMode = false;
 let hiddenTimeout = null;
@@ -33,6 +34,15 @@ let lastFileLabel = fileInfoEl ? fileInfoEl.textContent : "";
 let searchCursor = 0;
 let progressTimer = null;
 let minimalMode = false;
+let bossAction = "disguise";
+let bossEngaged = false;
+let hiddenByBossKey = false;
+let maxCharsPerPage = 900;
+let smartBreakEnabled = true;
+let autoSaveMode = "instant";
+let autoFadeEnabled = false;
+let fadeDelayMs = 5000;
+let autoSaveTimer = null;
 
 if (!invoke) {
   console.error("Tauri invoke API 未注入，界面将无法与后端通信。");
@@ -46,6 +56,10 @@ if (pageSlider) {
   pageSlider.min = "0";
   pageSlider.max = "100";
   pageSlider.value = "0";
+}
+
+if (restoreUiBtn) {
+  restoreUiBtn.setAttribute("aria-hidden", "true");
 }
 
 // 修复 Windows 透明窗口边框问题
@@ -138,11 +152,12 @@ function renderPage(offset, options = {}) {
     return;
   }
 
-  let low = Math.min(128, maxLen);
+  const pageLimit = Math.max(1, Math.min(maxLen, maxCharsPerPage || maxLen));
+  let low = Math.min(128, pageLimit);
   let high = low;
-  while (high < maxLen && measureFits(offset, offset + high)) {
+  while (high < pageLimit && measureFits(offset, offset + high)) {
     low = high;
-    high = Math.min(maxLen, high * 2);
+    high = Math.min(pageLimit, high * 2);
     if (low === high) break;
   }
   if (!measureFits(offset, offset + high)) {
@@ -158,14 +173,15 @@ function renderPage(offset, options = {}) {
     }
     high = measureFits(offset, offset + right) ? right : left;
   }
-  let finalLen = Math.max(1, Math.min(maxLen, high));
+  high = Math.min(high, pageLimit);
+  let finalLen = Math.max(1, Math.min(pageLimit, high));
   const slice = fullText.slice(offset, offset + finalLen);
-  const breakPoint = findBreakPoint(slice);
+  const breakPoint = smartBreakEnabled ? findBreakPoint(slice) : 0;
   if (breakPoint > 0 && breakPoint < finalLen) {
     finalLen = breakPoint;
   }
   if (finalLen <= 0) {
-    finalLen = Math.min(64, maxLen);
+    finalLen = Math.min(64, pageLimit);
   }
 
   const pageText = fullText.slice(offset, offset + finalLen);
@@ -197,15 +213,21 @@ function ensureReaderFits() {
   }
 }
 
-function scheduleProgressSave() {
+function performProgressSave(offset = currentOffset) {
   if (!invoke || !fullText) return;
+  invoke("update_progress", { offset }).catch((err) => {
+    console.debug("保存阅读进度失败", err);
+  });
+}
+
+function scheduleProgressSave() {
   if (progressTimer) {
     clearTimeout(progressTimer);
+    progressTimer = null;
   }
+  if (!invoke || !fullText || autoSaveMode !== "instant") return;
   progressTimer = setTimeout(() => {
-    invoke("update_progress", { offset: currentOffset }).catch((err) => {
-      console.debug("保存阅读进度失败", err);
-    });
+    performProgressSave();
     progressTimer = null;
   }, 400);
 }
@@ -222,6 +244,18 @@ function setMinimalMode(value, options = {}) {
   const changed = minimalMode !== value;
   minimalMode = value;
   document.body.classList.toggle("minimal-mode", minimalMode);
+  if (restoreUiBtn) {
+    restoreUiBtn.toggleAttribute("aria-hidden", !minimalMode);
+  }
+  if (minimalMode) {
+    if (hiddenTimeout) {
+      clearTimeout(hiddenTimeout);
+      hiddenTimeout = null;
+    }
+    document.body.classList.remove("auto-hidden");
+  } else {
+    autoDim();
+  }
   if (changed && notify) {
     notifyTrayState();
   }
@@ -328,40 +362,94 @@ async function handleSearch(backwards = false) {
 
 function setBossMode(value, options = {}) {
   const notify = options.notify ?? true;
-  const changed = bossMode !== value;
-  bossMode = value;
-  document.body.classList.toggle("hidden-mode", bossMode);
-  if (bossOverlay) {
-    bossOverlay.hidden = !bossMode;
+  const changed = bossEngaged !== value;
+  bossEngaged = value;
+
+  if (bossAction === "disguise") {
+    bossMode = value;
+    document.body.classList.toggle("hidden-mode", bossMode);
+    if (bossOverlay) {
+      bossOverlay.hidden = !bossMode;
+    }
+
+    if (bossMode) {
+      if (fileInfoEl) {
+        lastFileLabel = fileInfoEl.textContent || "";
+        fileInfoEl.textContent = "cargo build --release";
+      }
+      if (readerEl) readerEl.style.visibility = "hidden";
+      if (bossLogEl) {
+        bossLogEl.textContent = buildFakeLog();
+      }
+    } else {
+      if (readerEl) readerEl.style.visibility = "";
+      if (fileInfoEl) {
+        fileInfoEl.textContent = lastFileLabel || "";
+      }
+      if (bossLogEl) {
+        bossLogEl.textContent = "";
+      }
+      setMinimalMode(minimalMode, { notify: false });
+      renderPage(currentOffset, { pushHistory: false });
+    }
+
+    if (changed && notify) {
+      notifyTrayState();
+    }
+    return;
   }
 
-  if (bossMode) {
-    if (fileInfoEl) {
-      lastFileLabel = fileInfoEl.textContent || "";
-      fileInfoEl.textContent = "cargo build --release";
+  bossMode = false;
+  document.body.classList.remove("hidden-mode");
+  if (bossOverlay) {
+    bossOverlay.hidden = true;
+  }
+  if (bossLogEl) {
+    bossLogEl.textContent = "";
+  }
+  if (readerEl) {
+    readerEl.style.visibility = "";
+  }
+
+  if (appWindow) {
+    if (bossAction === "minimize") {
+      if (value) {
+        hiddenByBossKey = true;
+        appWindow.minimize?.();
+      } else if (hiddenByBossKey) {
+        appWindow.unminimize?.();
+        appWindow.show?.();
+        appWindow.setFocus?.();
+        hiddenByBossKey = false;
+      }
+    } else if (bossAction === "hide") {
+      if (value) {
+        hiddenByBossKey = true;
+        appWindow.hide?.();
+      } else if (hiddenByBossKey) {
+        appWindow.show?.();
+        appWindow.setFocus?.();
+        hiddenByBossKey = false;
+      }
     }
-    if (readerEl) readerEl.style.visibility = "hidden";
-    if (bossLogEl) {
-      bossLogEl.textContent = buildFakeLog();
-    }
-  } else {
-    if (readerEl) readerEl.style.visibility = "";
-    if (fileInfoEl) {
-      fileInfoEl.textContent = lastFileLabel || "";
-    }
-    if (bossLogEl) {
-      bossLogEl.textContent = "";
-    }
-    setMinimalMode(minimalMode);
+  } else if (!value) {
+    hiddenByBossKey = false;
+  }
+
+  if (!value) {
+    hiddenByBossKey = false;
+    setMinimalMode(minimalMode, { notify: false });
     renderPage(currentOffset, { pushHistory: false });
   }
+
   if (changed && notify) {
     notifyTrayState();
   }
 }
 
+
 function toggleBossMode(notify = true) {
-  setBossMode(!bossMode, { notify });
+  setBossMode(!bossEngaged, { notify });
 }
 
 function buildFakeLog() {
@@ -382,16 +470,27 @@ function buildFakeLog() {
 }
 
 function autoDim() {
-  clearTimeout(hiddenTimeout);
+  if (hiddenTimeout) {
+    clearTimeout(hiddenTimeout);
+    hiddenTimeout = null;
+  }
+  if (!autoFadeEnabled) {
+    document.body.classList.remove("auto-hidden");
+    return;
+  }
+
   document.body.classList.remove("auto-hidden");
   hiddenTimeout = setTimeout(() => {
-    if (!bossMode) {
+    if (!bossEngaged) {
       document.body.classList.add("auto-hidden");
     }
-  }, 4000);
+  }, fadeDelayMs);
 }
 
 function setupEventListeners() {
+  if (restoreUiBtn) {
+    restoreUiBtn.addEventListener("click", () => setMinimalMode(false));
+  }
   document.getElementById("open-file").addEventListener("click", async () => {
     const selected = await selectFileDialog();
     if (!selected) return;
@@ -437,7 +536,7 @@ function setupEventListeners() {
         goToPreviousPage();
         break;
       case "Escape":
-        if (bossMode) {
+        if (bossEngaged) {
           setBossMode(false);
         } else {
           toggleBossMode();
@@ -477,7 +576,7 @@ async function setupWindowHooks() {
   unlistenFns.push(
     await appWindow.listen("tauri://resize", () => {
       autoDim();
-      if (!bossMode) {
+      if (!bossEngaged) {
         renderPage(currentOffset, { pushHistory: false });
       }
     }),
@@ -494,21 +593,21 @@ async function setupWindowHooks() {
   );
   unlistenFns.push(
     await appWindow.listen("shortcut-prev-page", () => {
-      if (!bossMode && currentOffset > 0) {
-        prevPage();
+      if (!bossEngaged && currentOffset > 0) {
+        goToPreviousPage();
       }
     }),
   );
   unlistenFns.push(
     await appWindow.listen("shortcut-next-page", () => {
-      if (!bossMode && nextOffset < fullLength) {
-        nextPage();
+      if (!bossEngaged && nextOffset < fullLength) {
+        goToNextPage();
       }
     }),
   );
   unlistenFns.push(
     await appWindow.listen("shortcut-search", () => {
-      if (!bossMode && searchInput) {
+      if (!bossEngaged && searchInput) {
         searchInput.focus();
       }
     }),
@@ -577,86 +676,83 @@ async function applySettings(settings) {
   try {
     // 应用外观设置
     if (settings.appearance) {
-      // 窗口透明度
-      const windowOpacity = (settings.appearance.window_opacity || 90) / 100;
-      const textOpacity = (settings.appearance.text_opacity || 100) / 100;
+      const appearance = settings.appearance || {};
+      const windowOpacityRaw = Number(appearance.window_opacity);
+      const textOpacityRaw = Number(appearance.text_opacity);
+      const windowOpacity = Number.isFinite(windowOpacityRaw) ? windowOpacityRaw / 100 : 0.9;
+      const textOpacity = Number.isFinite(textOpacityRaw) ? textOpacityRaw / 100 : 1;
 
-      // 更新CSS变量
       document.documentElement.style.setProperty('--window-opacity', windowOpacity);
       document.documentElement.style.setProperty('--text-opacity', textOpacity);
 
-      // 背景颜色处理
-      const bgColor = settings.appearance.background_color || '#1b1f24';
-      const rgb = hexToRgb(bgColor);
-
-      // 更新窗口背景色和透明度
       const root = document.documentElement;
-      if (rgb) {
-        const normalizedOpacity = Math.max(0, Math.min(windowOpacity, 1));
-        const baseColor = `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${normalizedOpacity})`;
-        const hiddenOpacity = Math.max(0, Math.min(normalizedOpacity * 0.25, 1));
+      const bgColor = appearance.background_color || '#1b1f24';
+      const rgb = hexToRgb(bgColor);
+      const normalizedOpacity = Math.max(0, Math.min(windowOpacity, 1));
+      const hiddenOpacity = Math.max(0, Math.min(normalizedOpacity * 0.25, 1));
+      const baseColor = rgb && normalizedOpacity > 0
+        ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${normalizedOpacity})`
+        : 'transparent';
+      const hiddenColor = rgb && hiddenOpacity > 0
+        ? `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${hiddenOpacity})`
+        : 'transparent';
+      const textColor = appearance.text_color || '#d7dce2';
 
-        if (document.body) {
-          document.body.style.backgroundColor = normalizedOpacity <= 0.01 ? 'transparent' : baseColor;
-        }
-        if (root) {
-          root.style.setProperty('--bg-color', baseColor);
-          root.style.setProperty('--bg-color-hidden', `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${hiddenOpacity})`);
-        }
-      } else {
-        if (document.body) {
-          document.body.style.backgroundColor = 'transparent';
-        }
-        if (root) {
-          root.style.setProperty('--bg-color', 'transparent');
-          root.style.setProperty('--bg-color-hidden', 'transparent');
-        }
-      }
-
-      // 文字颜色
-      const textColor = settings.appearance.text_color || '#d7dce2';
-      if (root) {
-        root.style.setProperty('--text-color', textColor);
-      }
       if (document.body) {
+        document.body.style.backgroundColor = baseColor;
         document.body.style.color = textColor;
+      }
+      if (root) {
+        root.style.setProperty('--bg-color', baseColor);
+        root.style.setProperty('--bg-color-hidden', hiddenColor);
+        root.style.setProperty('--text-color', textColor);
       }
       if (readerEl) {
         readerEl.style.color = textColor;
         readerEl.style.opacity = textOpacity;
-      }
-// 字体大小和行高
-      if (readerEl) {
-        readerEl.style.fontSize = `${settings.appearance.font_size || 16}px`;
-        readerEl.style.lineHeight = `${(settings.appearance.line_height || 18) / 10}`;
+        const fontSizeRaw = Number(appearance.font_size);
+        const lineHeightRaw = Number(appearance.line_height);
+        const fontSize = Number.isFinite(fontSizeRaw) && fontSizeRaw > 0 ? fontSizeRaw : 16;
+        const lineHeight = Number.isFinite(lineHeightRaw) && lineHeightRaw > 0 ? lineHeightRaw / 10 : 1.8;
+        readerEl.style.fontSize = `${fontSize}px`;
+        readerEl.style.lineHeight = `${lineHeight}`;
       }
 
-      // 窗口行为设置
       if (appWindow) {
         if (appWindow.setAlwaysOnTop) {
-          await appWindow.setAlwaysOnTop(settings.appearance.always_on_top !== false);
+          await appWindow.setAlwaysOnTop(appearance.always_on_top !== false);
         }
         if (appWindow.setSkipTaskbar) {
-          await appWindow.setSkipTaskbar(settings.appearance.show_in_taskbar === false);
+          await appWindow.setSkipTaskbar(appearance.show_in_taskbar !== true);
         }
       }
     }
 
-    // 应用阅读设置
-    if (settings.reading) {
-      const interval = settings.reading.auto_save_interval;
-      if (typeof interval === "string") {
-        setupAutoSave(interval);
-      }
-    }
+    const resolvedMaxChars = Number(settings.max_chars_per_page);
+    maxCharsPerPage = Number.isFinite(resolvedMaxChars) && resolvedMaxChars > 0
+      ? Math.floor(resolvedMaxChars)
+      : 900;
 
-    // 更新老板键显示
+    const readingConfig = settings.reading || {};
+    smartBreakEnabled = readingConfig.smart_break !== false;
+    const interval = typeof readingConfig.auto_save_interval === 'string'
+      ? readingConfig.auto_save_interval
+      : 'instant';
+    setupAutoSave(interval);
+
+    const privacyConfig = settings.privacy || {};
+    bossAction = privacyConfig.boss_action || 'disguise';
+    autoFadeEnabled = !!privacyConfig.auto_fade;
+    const delaySeconds = Number(privacyConfig.fade_delay);
+    fadeDelayMs = Math.max(0, Number.isFinite(delaySeconds) ? delaySeconds * 1000 : 5000);
+    autoDim();
+    setBossMode(bossEngaged, { notify: false });
+
     if (settings.boss_key && bossKeyHintEl) {
       bossKeyHintEl.textContent = `快捷键: ${settings.boss_key}`;
     }
 
-    // 如果正在阅读，重新渲染页面以应用新的分页设置
-    if (fullText && settings.max_chars_per_page) {
+    if (fullText) {
       renderPage(currentOffset, { pushHistory: false });
     }
 
@@ -666,29 +762,28 @@ async function applySettings(settings) {
   }
 }
 
+
 // 设置自动保存定时器
-let autoSaveTimer = null;
 function setupAutoSave(interval) {
-  // 清除之前的定时器
+  autoSaveMode = interval || "instant";
+
   if (autoSaveTimer) {
     clearInterval(autoSaveTimer);
     autoSaveTimer = null;
   }
 
-  // 设置新的定时器
-  if (interval === 'instant') {
-    // 即时保存模式已在 updateProgress 中处理
+  if (autoSaveMode === "instant" || autoSaveMode === "manual") {
     return;
   }
 
-  const intervalMs = interval === '5' ? 5000 :
-                     interval === '30' ? 30000 :
-                     interval === '60' ? 60000 : 0;
+  const intervalMs = autoSaveMode === '5' ? 5000 :
+                     autoSaveMode === '30' ? 30000 :
+                     autoSaveMode === '60' ? 60000 : 0;
 
   if (intervalMs > 0) {
     autoSaveTimer = setInterval(() => {
-      if (currentOffset > 0 && fullText) {
-        commitProgress();
+      if (fullText) {
+        performProgressSave();
       }
     }, intervalMs);
   }
@@ -726,3 +821,6 @@ async function init() {
 }
 
 init();
+
+
+
